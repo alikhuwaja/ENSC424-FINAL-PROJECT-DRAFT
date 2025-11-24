@@ -1,97 +1,205 @@
-# src/train.py
+import os
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 import torch
-from torch.utils.data import Dataset, DataLoader
-import random
+from torch.utils.data import DataLoader, random_split
+from torch.optim import Adam
+from tqdm import tqdm
 import numpy as np
 
-# ----- tiny config -----
-N_MELS = 64
-N_CLASSES = 6
-BATCH_SIZE = 8
-EPOCHS = 5
-LR = 1e-3
+from sklearn.metrics import f1_score, balanced_accuracy_score
 
-def set_seed(seed: int = 42):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+from .dataset import SERDataset
+from .models import CRNN, SERTransformer
+from . import config
 
-# ----- dummy dataset -----
-class DummyAudioDataset(Dataset):
-    def __init__(self, n_samples=64, n_mels=N_MELS, t=100, n_classes=N_CLASSES):
-        self.x = torch.randn(n_samples, 1, n_mels, t)
-        self.y = torch.randint(0, n_classes, (n_samples,))
 
-    def __len__(self):
-        return len(self.x)
+def collate_fn(batch):
+    """
+    Pads/collates Mel spectrograms into (B, 1, NUM_MEL, T) tensor.
+    """
+    xs, ys = zip(*batch)  # xs are (NUM_MEL, T) tensors from SERDataset
 
-    def __getitem__(self, idx):
-        return self.x[idx], self.y[idx]
+    # Ensure xs are tensors (in case you ever pass numpy arrays)
+    xs = [
+        x if isinstance(x, torch.Tensor) else torch.from_numpy(x)
+        for x in xs
+    ]
 
-# ----- simple model (CRNN-ish) -----
-class SimpleCRNN(torch.nn.Module):
-    def __init__(self, n_mels=N_MELS, n_classes=N_CLASSES):
-        super().__init__()
-        self.cnn = torch.nn.Sequential(
-            torch.nn.Conv2d(1, 16, kernel_size=3, padding=1),
-            torch.nn.ReLU(),
-            torch.nn.MaxPool2d((2, 2)),
-            torch.nn.Conv2d(16, 32, kernel_size=3, padding=1),
-            torch.nn.ReLU(),
-            torch.nn.MaxPool2d((2, 2)),
-        )
-        self.gru = torch.nn.GRU(
-            input_size=32 * (n_mels // 4),
-            hidden_size=64,
-            batch_first=True,
-            bidirectional=True,
-        )
-        self.fc = torch.nn.Linear(64 * 2, n_classes)
+    # Pad time dimension
+    max_T = max(x.shape[1] for x in xs)
+    padded = []
+    for x in xs:
+        pad = max_T - x.shape[1]
+        if pad > 0:
+            x = torch.nn.functional.pad(x, (0, pad))  # pad along time dim
+        padded.append(x)
 
-    def forward(self, x):
-        # x: (B, 1, n_mels, T)
-        z = self.cnn(x)               # (B, C, F, T')
-        B, C, F, T = z.shape
-        z = z.permute(0, 3, 1, 2)     # (B, T', C, F)
-        z = z.reshape(B, T, C * F)    # (B, T', feat)
-        out, _ = self.gru(z)          # (B, T', 2*hidden)
-        out = out[:, -1, :]           # last time step
-        logits = self.fc(out)         # (B, n_classes)
-        return logits
+    X = torch.stack(padded)      # (B, NUM_MEL, T)
+    X = X.unsqueeze(1)           # (B, 1, NUM_MEL, T) for your CNN
 
-# ----- training loop -----
-def train_epoch(model, loader, optim, device):
+    # ys are 0-D tensors or ints; stack them cleanly
+    if isinstance(ys[0], torch.Tensor):
+        Y = torch.stack(ys)      # (B,)
+    else:
+        Y = torch.tensor(ys)
+
+    return X.float(), Y.long()
+
+
+# --------------------------
+#   SIMPLE DATA AUGMENTATIONS
+# --------------------------
+def apply_augmentations(x):
+    """
+    x: (B, 1, mel, T)
+    """
+    B, _, M, T = x.shape
+
+    # Gaussian noise
+    if config.AUG_NOISE:
+        noise = torch.randn_like(x) * 0.01
+        x = x + noise
+
+    # Frequency masking
+    if config.AUG_FREQ_MASK:
+        f = np.random.randint(0, M // 6)
+        f0 = np.random.randint(0, M - f)
+        x[:, :, f0:f0 + f, :] = 0
+
+    # Time masking
+    if config.AUG_TIME_MASK:
+        t = np.random.randint(0, T // 6)
+        t0 = np.random.randint(0, T - t)
+        x[:, :, :, t0:t0 + t] = 0
+
+    return x
+
+
+# --------------------------
+#   TRAINING LOOP
+# --------------------------
+def train_epoch(model, loader, optimizer, device):
     model.train()
     loss_fn = torch.nn.CrossEntropyLoss()
-    total_loss = 0.0
+    running_loss = 0
 
-    for x, y in loader:
-        x, y = x.to(device), y.to(device)
-        optim.zero_grad()
-        logits = model(x)
+    for X, y in tqdm(loader, desc="Training"):
+        X, y = X.to(device), y.to(device)
+
+        # Apply augmentations ONLY during training
+        if config.USE_AUGMENTATIONS:
+            X = apply_augmentations(X)
+
+        optimizer.zero_grad()
+        logits = model(X)
         loss = loss_fn(logits, y)
         loss.backward()
-        optim.step()
-        total_loss += loss.item() * x.size(0)
+        optimizer.step()
+        running_loss += loss.item() * X.size(0)
 
-    return total_loss / len(loader.dataset)
+    return running_loss / len(loader.dataset)
 
+
+# --------------------------
+#   VALIDATION (with Macro-F1 & UAR)
+# --------------------------
+def validate(model, loader, device):
+    model.eval()
+    loss_fn = torch.nn.CrossEntropyLoss()
+    val_loss = 0
+
+    all_preds = []
+    all_labels = []
+
+    with torch.no_grad():
+        for X, y in loader:
+            X, y = X.to(device), y.to(device)
+
+            logits = model(X)
+            loss = loss_fn(logits, y)
+            val_loss += loss.item() * X.size(0)
+
+            preds = torch.argmax(logits, dim=1)
+
+            all_preds.extend(preds.cpu().numpy())
+            all_labels.extend(y.cpu().numpy())
+
+    # Metrics
+    acc = np.mean(np.array(all_preds) == np.array(all_labels))
+    macro_f1 = f1_score(all_labels, all_preds, average="macro")
+    uar = balanced_accuracy_score(all_labels, all_preds)
+
+    return (
+        val_loss / len(loader.dataset),
+        acc,
+        macro_f1,
+        uar
+    )
+
+
+# --------------------------
+#   MAIN
+# --------------------------
 def main():
-    set_seed()
     device = "cuda" if torch.cuda.is_available() else "cpu"
-    print("Using device:", device)
+    print("Device:", device)
 
-    dataset = DummyAudioDataset()
-    loader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True)
+    dataset = SERDataset()
+    train_size = int(config.TRAIN_SPLIT * len(dataset))
+    val_size = len(dataset) - train_size
+    train_ds, val_ds = random_split(dataset, [train_size, val_size])
 
-    model = SimpleCRNN().to(device)
-    optim = torch.optim.Adam(model.parameters(), lr=LR)
+    train_loader = DataLoader(
+        train_ds,
+        batch_size=config.BATCH_SIZE,
+        shuffle=True,
+        collate_fn=collate_fn,
+    )
+    val_loader = DataLoader(
+        val_ds,
+        batch_size=config.BATCH_SIZE,
+        shuffle=False,
+        collate_fn=collate_fn,
+    )
 
-    for epoch in range(EPOCHS):
-        loss = train_epoch(model, loader, optim, device)
-        print(f"Epoch {epoch+1}/{EPOCHS} - loss={loss:.4f}")
+    # --------------------------
+    #  SWITCH MODELS HERE
+    # --------------------------
+    if config.MODEL_TYPE == "crnn":
+        model = CRNN().to(device)
+        model_name = "best_model_crnn.pth"
+    else:
+        model = SERTransformer().to(device)
+        model_name = "best_model_transformer.pth"
+
+    optimizer = Adam(model.parameters(), lr=config.LEARNING_RATE)
+
+    best_val_loss = float("inf")
+
+    for epoch in range(1, config.N_EPOCHS + 1):
+        print(f"\nEpoch {epoch}/{config.N_EPOCHS}")
+
+        train_loss = train_epoch(model, train_loader, optimizer, device)
+        val_loss, acc, macro_f1, uar = validate(model, val_loader, device)
+
+        print(
+            f"Train Loss: {train_loss:.4f}  |  "
+            f"Val Loss: {val_loss:.4f}  |  "
+            f"Acc: {acc:.4f}  |  "
+            f"Macro-F1: {macro_f1:.4f}  |  "
+            f"UAR: {uar:.4f}"
+        )
+
+        # -----------------------
+        #  SAVE BEST MODEL
+        # -----------------------
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            torch.save(model.state_dict(), model_name)
+            print(f"Saved new best model to {model_name}!")
+
+    print("\nTraining complete.")
 
 if __name__ == "__main__":
     main()
+    

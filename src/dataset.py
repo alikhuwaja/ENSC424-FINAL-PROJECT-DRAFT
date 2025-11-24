@@ -5,7 +5,21 @@ from torch.utils.data import Dataset
 
 from . import config, features
 
-from . import config, features
+
+# ------------------------------------------------------------
+# Emotion ID remapping:
+#   Original dataset IDs: {1,3,4,5,6,7}
+#   Model class indices : {0,1,2,3,4,5}
+# ------------------------------------------------------------
+EMOTION_MAP = {
+    1: 0,   # neutral
+    3: 1,   # happy
+    4: 2,   # sad
+    5: 3,   # angry
+    6: 4,   # fearful
+    7: 5,   # disgust
+}
+
 
 class SERDataset(Dataset):
     """
@@ -34,30 +48,34 @@ class SERDataset(Dataset):
         return len(self.df)
 
     def __getitem__(self, idx):
-
         """
         Returns:
           x: log-Mel features as torch.FloatTensor (NUM_MEL, T)
-          y: emotion_id as torch.LongTensor (scalar)
+          y: emotion label mapped to 0–5
         """
-        # return the dataframe row for now; replace with feature extraction as needed
         row = self.df.iloc[idx]
         audio_path = row["path"]
-        feats= features.extract_features_from_path(audio_path)
-        x= torch.from_numpy(feats)
-        y= torch.tensor(int(row["emotion_id"]))  # zero-based class index
+
+        # Audio → Mel Spectrogram
+        feats = features.extract_features_from_path(audio_path)
+        x = torch.from_numpy(feats)
+
+        # Map emotion_id → 0..5 (CRUCIAL for CrossEntropyLoss)
+        raw_id = int(row["emotion_id"])
+        y = torch.tensor(EMOTION_MAP[raw_id])
+
         return x, y
     
     def get_audio_metadata(self, idx):
         """
-        Return all columns for this audio sample as a  data set row dictionary.
+        Return all columns for this audio sample as a dataset row dictionary.
         """
         row = self.df.iloc[idx]
         return row.to_dict()
     
     def get_matching_video_rows(self, audio_idx):
         """
-        Given an audio sample index, return a DataFrame of all matching video rows.
+        Given an audio sample index, return a DataFrame of matching video rows.
         If no video index is loaded, returns None.
         """
         if self.video_df is None:
@@ -74,11 +92,9 @@ class SERDataset(Dataset):
         return matching_rows
 
 
-    # Note: this extracts AUDIO features from the video file (its audio track),
-    # not visual (image) features.
     def get_video_features(self, video_path):
         """
-        Given a video file path, extract and return log-Mel features as a torch.FloatTensor.
+        Extract log-Mel features from the video's audio track.
         """
         feats = features.extract_features_from_path(video_path)
         x = torch.from_numpy(feats)
@@ -86,8 +102,7 @@ class SERDataset(Dataset):
     
     def get_video_metadata(self, video_path):
         """
-        Given a video file path, return the corresponding video row as a dictionary.
-        If no matching row is found, returns None.
+        Return metadata row for given video path.
         """
         if self.video_df is None:
             return None
@@ -103,9 +118,7 @@ class SERDataset(Dataset):
 class SERVideoIndex(Dataset):
     """
     Simple dataset for the RAVDESS VIDEO index.
-
-    Does NOT do training or feature extraction.
-    Just returns each row of ravdess_video_index.csv as a dict.
+    Returns each row of ravdess_video_index.csv as a dict.
     """
 
     def __init__(self):
@@ -117,25 +130,15 @@ class SERVideoIndex(Dataset):
     def __getitem__(self, idx):
         row = self.df.iloc[idx]
         return row.to_dict()
-    
 
 
-    
+#if __name__ == "__main__":
+ #   from torch.utils.data import DataLoader
 
-    
+  #  ds = SERDataset()
+   # print("Total samples:", len(ds))
 
-    
-
-
-
-
-
-    
-
-
-    
-
-
-
-
-
+    # Inspect one sample
+    #x, y = ds[0]
+    #print("Feature shape:", x.shape)
+    #print("Label:", y.item())
