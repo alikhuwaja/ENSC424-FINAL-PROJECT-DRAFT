@@ -27,6 +27,7 @@ NUM_CLASSES = 6
 BATCH_SIZE = 32
 N_EPOCHS = 20
 LEARNING_RATE = 1e-3
+#for the CNN use 1e-3 and for Transformer use 3e-4
 
 TRAIN_SPLIT = 0.8
 VAL_SPLIT = 0.2

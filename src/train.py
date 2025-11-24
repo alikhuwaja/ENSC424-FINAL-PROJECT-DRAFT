@@ -1,5 +1,8 @@
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+
+from pathlib import Path
+
 import torch
 from torch.utils.data import DataLoader, random_split
 from torch.optim import Adam
@@ -17,9 +20,7 @@ def collate_fn(batch):
     """
     Pads/collates Mel spectrograms into (B, 1, NUM_MEL, T) tensor.
     """
-    xs, ys = zip(*batch)  # xs are (NUM_MEL, T) tensors from SERDataset
-
-    # Ensure xs are tensors (in case you ever pass numpy arrays)
+    xs, ys = zip(*batch)  
     xs = [
         x if isinstance(x, torch.Tensor) else torch.from_numpy(x)
         for x in xs
@@ -31,13 +32,12 @@ def collate_fn(batch):
     for x in xs:
         pad = max_T - x.shape[1]
         if pad > 0:
-            x = torch.nn.functional.pad(x, (0, pad))  # pad along time dim
+            x = torch.nn.functional.pad(x, (0, pad)) 
         padded.append(x)
 
-    X = torch.stack(padded)      # (B, NUM_MEL, T)
-    X = X.unsqueeze(1)           # (B, 1, NUM_MEL, T) for your CNN
+    X = torch.stack(padded)      
+    X = X.unsqueeze(1)           
 
-    # ys are 0-D tensors or ints; stack them cleanly
     if isinstance(ys[0], torch.Tensor):
         Y = torch.stack(ys)      # (B,)
     else:
@@ -144,6 +144,12 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print("Device:", device)
 
+    # Project root = one level above src/
+    BASE_DIR = Path(__file__).resolve().parents[1]
+    # Folder for per-epoch checkpoints
+    EPOCH_DIR = BASE_DIR / "epoch"
+    EPOCH_DIR.mkdir(exist_ok=True)  
+
     dataset = SERDataset()
     train_size = int(config.TRAIN_SPLIT * len(dataset))
     val_size = len(dataset) - train_size
@@ -167,10 +173,10 @@ def main():
     # --------------------------
     if config.MODEL_TYPE == "crnn":
         model = CRNN().to(device)
-        model_name = "best_model_crnn.pth"
+        best_ckpt_path = BASE_DIR / "best_model_crnn.pth"
     else:
         model = SERTransformer().to(device)
-        model_name = "best_model_transformer.pth"
+        best_ckpt_path = BASE_DIR / "best_model_transformer.pth"
 
     optimizer = Adam(model.parameters(), lr=config.LEARNING_RATE)
 
@@ -191,15 +197,23 @@ def main():
         )
 
         # -----------------------
-        #  SAVE BEST MODEL
+        #  SAVE EPOCH CHECKPOINT
+        # -----------------------
+        epoch_ckpt_name = f"{config.MODEL_TYPE}_epoch{epoch}.pth"
+        epoch_ckpt_path = EPOCH_DIR / epoch_ckpt_name
+        torch.save(model.state_dict(), epoch_ckpt_path)
+        print(f"Saved epoch checkpoint ")
+
+        # -----------------------
+        #  SAVE BEST MODEL (in root)
         # -----------------------
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            torch.save(model.state_dict(), model_name)
-            print(f"Saved new best model to {model_name}!")
+            torch.save(model.state_dict(), best_ckpt_path)
+            print(f"Saved new best model!")
 
     print("\nTraining complete.")
 
+
 if __name__ == "__main__":
     main()
-    

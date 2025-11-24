@@ -15,21 +15,21 @@ from . import config, features
 # --------------------------
 #  MODEL LOADER
 # --------------------------
-def load_model(device):
+def load_model(model_type, device):
     """
-    Load the best model depending on config.MODEL_TYPE.
+    Load the best model for a given model_type ('crnn' or 'transformer').
     Returns: (model, model_name, ckpt_name).
     """
-    model_type = getattr(config, "MODEL_TYPE", "crnn")
-
     if model_type == "crnn":
         model = CRNN().to(device)
         ckpt = "best_model_crnn.pth"
         model_name = "CRNN"
-    else:
+    elif model_type == "transformer":
         model = SERTransformer().to(device)
         ckpt = "best_model_transformer.pth"
         model_name = "SERTransformer"
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}")
 
     state = torch.load(ckpt, map_location=device)
     model.load_state_dict(state)
@@ -135,9 +135,6 @@ def evaluate_compression_for_bitrate(model, dataset, device, bitrate="64k"):
         all_true.append(int(batch_y.item()))
         all_pred.append(int(preds.item()))
 
-        if (idx + 1) % 100 == 0:
-            print(f"[{bitrate}] processed {idx + 1}/{n}")
-
     all_true = np.array(all_true)
     all_pred = np.array(all_pred)
 
@@ -155,30 +152,33 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print("Device:", device)
 
-    # 1) Load best model (CRNN or Transformer)
-    model, model_name, ckpt = load_model(device)
-    print(f"Using model: {model_name} (MODEL_TYPE={config.MODEL_TYPE}, checkpoint='{ckpt}')")
-
-    # 2) Baseline on original WAVs
-    print("\n=== Baseline (original WAV) ===")
-    base_acc, base_f1, base_uar, base_cm = evaluate_baseline(model, device)
-    print(f"Baseline Accuracy : {base_acc:.4f}")
-    print(f"Baseline Macro-F1 : {base_f1:.4f}")
-    print(f"Baseline UAR      : {base_uar:.4f}")
-    print("Baseline confusion matrix:\n", base_cm)
-
-    # 3) Compression evaluation (assumes precompress_all.py has been run)
-    dataset = SERDataset()
+    model_types = ["crnn", "transformer"]
     bitrates = ["128k", "64k", "32k"]
 
-    print("\n=== Compression robustness (precompressed *_decoded.wav) ===")
-    for br in bitrates:
-        acc_c, f1_c, uar_c = evaluate_compression_for_bitrate(
-            model, dataset, device, bitrate=br
-        )
-        print(
-            f"{br}: Acc={acc_c:.4f} | Macro-F1={f1_c:.4f} | UAR={uar_c:.4f}"
-        )
+    for model_type in model_types:
+        print("\n" + "=" * 60)
+        print(f"Evaluating model_type = '{model_type}'")
+
+        # 1) Load best model for this type
+        model, model_name, ckpt = load_model(model_type, device)
+        print(f"Using model: {model_name} (checkpoint='{ckpt}')")
+
+        # 2) Baseline on original WAVs
+        print("\nBaseline ")
+        base_acc, base_f1, base_uar, base_cm = evaluate_baseline(model, device)
+        print(f"Baseline Accuracy : {base_acc:.4f}")
+        print(f"Baseline Macro-F1 : {base_f1:.4f}")
+        print(f"Baseline UAR      : {base_uar:.4f}")
+        print("Baseline confusion matrix:\n", base_cm)
+
+        # 3) Compression evaluation
+        dataset = SERDataset()
+        print("\nCompression robustness ")
+        for br in bitrates:
+            acc_c, f1_c, uar_c = evaluate_compression_for_bitrate(
+                model, dataset, device, bitrate=br
+            )
+            print(f"{br}: Acc={acc_c:.4f} | Macro-F1={f1_c:.4f} | UAR={uar_c:.4f}")
 
 
 if __name__ == "__main__":

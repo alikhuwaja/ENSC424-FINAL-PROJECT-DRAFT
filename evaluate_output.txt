@@ -1,0 +1,49 @@
+
+(D:\Study Materials\ENSC 424\Project\ser-project\.conda) D:\Study Materials\ENSC 424\Project\ser-project>python -m src.evaluate
+Device: cuda
+
+============================================================
+Evaluating model_type = 'crnn'
+D:\Study Materials\ENSC 424\Project\ser-project\src\evaluate.py:34: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  state = torch.load(ckpt, map_location=device)
+Using model: CRNN (checkpoint='best_model_crnn.pth')
+
+Baseline 
+Baseline Accuracy : 0.6870
+Baseline Macro-F1 : 0.6889
+Baseline UAR      : 0.6898
+Baseline confusion matrix:
+ [[ 980   36  139    7   49   64]
+ [ 128  818   46  135  442   78]
+ [ 116   24 1081    2  279  145]
+ [  23   89    7 1324   78  126]
+ [  34   48  248   27 1224   66]
+ [  34   35  147   99  168  980]]
+
+Compression robustness
+128k: Acc=0.6701 | Macro-F1=0.6716 | UAR=0.6713
+64k: Acc=0.6647 | Macro-F1=0.6657 | UAR=0.6654
+32k: Acc=0.6375 | Macro-F1=0.6378 | UAR=0.6367
+
+============================================================
+Evaluating model_type = 'transformer'
+D:\Study Materials\ENSC 424\Project\ser-project\src\evaluate.py:34: FutureWarning: You are using `torch.load` with `weights_only=False` (the current default value), which uses the default pickle module implicitly. It is possible to construct malicious pickle data which will execute arbitrary code during unpickling (See https://github.com/pytorch/pytorch/blob/main/SECURITY.md#untrusted-models for more details). In a future release, the default value for `weights_only` will be flipped to `True`. This limits the functions that could be executed during unpickling. Arbitrary objects will no longer be allowed to be loaded via this mode unless they are explicitly allowlisted by the user via `torch.serialization.add_safe_globals`. We recommend you start setting `weights_only=True` for any use case where you don't have full control of the loaded file. Please open an issue on GitHub for any issues related to this experimental feature.
+  state = torch.load(ckpt, map_location=device)
+Using model: SERTransformer (checkpoint='best_model_transformer.pth')
+
+Baseline
+Baseline Accuracy : 0.4030
+Baseline Macro-F1 : 0.3583
+Baseline UAR      : 0.4001
+Baseline confusion matrix:
+ [[ 557  243  331   31   28   85]
+ [ 269  585   99  585   49   60]
+ [ 246  110 1075   92   40   84]
+ [  45  277   24 1199   14   88]
+ [ 262  305  492  425   76   87]
+ [ 254  286  403  236   18  266]]
+
+Compression robustness
+128k: Acc=0.4012 | Macro-F1=0.3561 | UAR=0.3983
+64k: Acc=0.4021 | Macro-F1=0.3558 | UAR=0.3991
+32k: Acc=0.4035 | Macro-F1=0.3558 | UAR=0.4006
