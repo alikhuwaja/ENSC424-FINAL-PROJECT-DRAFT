@@ -25,8 +25,8 @@ SEGMENT_SEC = 3       # Duration of each audio segment
 # -----------------------------
 NUM_CLASSES = 6
 BATCH_SIZE = 32
-N_EPOCHS = 30
-LEARNING_RATE = 3e-4
+N_EPOCHS = 50
+LEARNING_RATE = 1e-3
 #for the CNN use 1e-3 and for Transformer use 3e-4
 
 TRAIN_SPLIT = 0.8
@@ -36,7 +36,7 @@ VAL_SPLIT = 0.2
 #   MODEL SELECTION
 # -----------------------------
 # "crnn" or "transformer"
-MODEL_TYPE = "transformer"
+MODEL_TYPE = "crnn"
 
 # -----------------------------
 #   TRANSFORMER HYPERPARAMETERS
@@ -49,8 +49,8 @@ TRANSFORMER_NUM_LAYERS = 4
 # -----------------------------
 #   DATA AUGMENTATION OPTIONS
 # -----------------------------
-USE_AUGMENTATIONS = False     
+USE_AUGMENTATIONS = True     
 
-AUG_NOISE = False             # Gaussian noise
-AUG_FREQ_MASK = False         # frequency masking
-AUG_TIME_MASK = False         # time masking
+AUG_NOISE = True             # Gaussian noise
+AUG_FREQ_MASK = True         # frequency masking
+AUG_TIME_MASK = True         # time masking

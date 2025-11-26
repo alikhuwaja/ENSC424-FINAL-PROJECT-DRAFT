@@ -1,4 +1,3 @@
-# app.py
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ["MKL_THREADING_LAYER"] = "GNU"
