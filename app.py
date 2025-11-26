@@ -175,7 +175,7 @@ def demo():
     <h3>1) Upload audio file</h3>
     <div class="row">
       <input id="fileInput" type="file" accept="audio/*" />
-      <button id="btnUpload">Predict (Upload)</button>
+      <button id="btnUpload">Upload</button>
     </div>
 
     <hr style="border:none;border-top:1px solid #e5e7eb;margin:16px 0;" />
