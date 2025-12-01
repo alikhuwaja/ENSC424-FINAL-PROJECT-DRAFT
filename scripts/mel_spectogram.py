@@ -8,7 +8,7 @@ from src import features
 
 def plot_example(csv_path, title_prefix):
     df = pd.read_csv(csv_path)
-    row = df.iloc[0]
+    row = df.iloc[868]
     #how many we want to read? change the index number for df.iloc[num]
     audio_path = row["path"]
     emotion = row.get("emotion", "unknown")

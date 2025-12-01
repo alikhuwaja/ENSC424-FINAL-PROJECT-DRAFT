@@ -137,7 +137,7 @@ def demo():
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>SER Demo (Upload + Mic)</title>
+  <title>SER Demo (Media Upload + Real time Mic input)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {{ font-family: system-ui, Segoe UI, Arial; max-width: 980px; margin: 28px auto; padding: 0 14px; }}
@@ -155,7 +155,7 @@ def demo():
 </head>
 <body>
   <div class="card">
-    <h1>Speech Emotion Recognition — Upload + Microphone</h1>
+    <h1>Speech Emotion Recognition : Media Upload + Real time Mic input</h1>
     <div class="muted">
       Labels: <span class="pill">{", ".join(EMO_LABELS)}</span> &nbsp; | &nbsp;
       Mic mode sends a <b>5s</b> segment and updates prediction.
@@ -334,3 +334,6 @@ async def predict(file: UploadFile = File(...), model_type: str = "crnn"):
 # python -m uvicorn app:app --host 127.0.0.1 --port 9000
 # Demo:
 # http://127.0.0.1:9000/demo
+
+#activating conda
+#conda activate "D:\Study Materials\ENSC 424\Project\ser-project\.conda"

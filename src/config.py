@@ -25,7 +25,7 @@ SEGMENT_SEC = 3       # Duration of each audio segment
 # -----------------------------
 NUM_CLASSES = 6
 BATCH_SIZE = 32
-N_EPOCHS = 50
+N_EPOCHS = 25
 LEARNING_RATE = 1e-3
 #for the CNN use 1e-3 and for Transformer use 3e-4
 
