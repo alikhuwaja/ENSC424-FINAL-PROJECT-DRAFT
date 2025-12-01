@@ -45,6 +45,7 @@ Given an input audio clip (speech), classify it into one of the emotion categori
 
 ## Repository Structure 
 
+```text
 ser-project/
 ├── app.py                 # FastAPI inference server
 ├── requirements.txt
@@ -63,6 +64,17 @@ ser-project/
 │   ├── raw/               # original dataset files
 │   └── processed/         # cached features/splits
 └── checkpoints/           # saved models
+
+
+
+
+
+
+
+
+
+
+
 
 
 
