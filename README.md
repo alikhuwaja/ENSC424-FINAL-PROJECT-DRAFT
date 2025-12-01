@@ -46,25 +46,23 @@ Given an input audio clip (speech), classify it into one of the emotion categori
 ## Repository Structure 
 
 ser-project/
-│
-├── app.py # FastAPI inference server 
+├── app.py                 # FastAPI inference server
 ├── requirements.txt
 ├── README.md
-│
 ├── src/
-│ ├── config.py # sample rate, n_mels, labels, paths
-│ ├── features.py # mel/log-mel extraction utilities
-│ ├── dataset.py # PyTorch Dataset + label mapping
-│ ├── train.py # training loop 
-│ ├── eval.py # evaluation script 
-│ └── models/
-│ ├── crnn.py # CRNN model
-│ └── transformer.py # Transformer model
-│
-├── notebooks/ # experiments / EDA / training notebooks
+│   ├── config.py          # sample rate, n_mels, labels, paths
+│   ├── features.py        # mel/log-mel extraction utilities
+│   ├── dataset.py         # PyTorch Dataset + label mapping
+│   ├── train.py           # training loop
+│   ├── eval.py            # evaluation script
+│   └── models/
+│       ├── crnn.py        # CRNN model
+│       └── transformer.py # Transformer model
+├── notebooks/             # experiments / EDA / training notebooks
 ├── data/
-│ ├── raw/ # original dataset files
-│ └── processed/ # cached features / splits
-└── checkpoints/ # saved models
+│   ├── raw/               # original dataset files
+│   └── processed/         # cached features/splits
+└── checkpoints/           # saved models
+
 
 
